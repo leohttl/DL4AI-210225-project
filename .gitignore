@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environment
+dl4ai-env/
+venv/
+.venv/
+
+# Data (too large for git)
+data_nasdaq_csv.zip
+data-vn-20230228.zip
+
+# Models (generated, too large)
+deployment/models/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.bak
+node_modules/
+package*.json
+
+# Old scripts (build helpers)
+add_*.py
+fix_*.py
+build_report.js

@@ -1,0 +1,74 @@
+version: '3.8'
+
+# DL4AI Stock Prediction — Full Stack Deployment
+# Usage: docker compose up -d
+
+services:
+  # ── Database ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: dl4ai
+      POSTGRES_PASSWORD: dl4ai_pass
+      POSTGRES_DB: stock_prediction
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # ── FastAPI Prediction API ────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_DIR: /app/models
+    volumes:
+      - ../models:/app/models:ro
+    depends_on:
+      - postgres
+
+  # ── Streamlit Web App ─────────────────────────────────────────────────────
+  webapp:
+    image: python:3.11-slim
+    working_dir: /app
+    command: >
+      bash -c "pip install -r requirements.txt && streamlit run app.py --server.port 8501 --server.address 0.0.0.0"
+    ports:
+      - "8501:8501"
+    environment:
+      API_URL: http://api:8000
+      DATA_DIR: /data/data_vn
+    volumes:
+      - ../webapp:/app
+      - ../../data_vn:/data/data_vn:ro
+      - ../models:/app/models:ro
+    depends_on:
+      - api
+
+  # ── Airflow (simplified: all-in-one) ─────────────────────────────────────
+  airflow:
+    image: apache/airflow:2.9.0
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://dl4ai:dl4ai_pass@postgres/stock_prediction
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__SECRET_KEY: dl4ai-secret-key
+    ports:
+      - "8080:8080"  # Airflow UI
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ../../data_vn:/opt/airflow/data/data_vn:ro
+      - ../models:/opt/airflow/models:ro
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      - postgres
+    command: >
+      bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@local && airflow webserver -D && airflow scheduler"
+
+volumes:
+  postgres_data:
+  airflow_logs:

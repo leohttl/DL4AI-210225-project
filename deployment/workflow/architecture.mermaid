@@ -1,0 +1,70 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4A90D9', 'edgeLabelBackground':'#fff'}}}%%
+flowchart TB
+    subgraph DATA_SOURCES["🌐 Data Sources"]
+        API_VN["Vietnam Stock API<br/>(SSI / VNDirect)"]
+        API_FIN["Financial Ratios<br/>(cafef.vn)"]
+        API_DIV["Dividend History"]
+    end
+
+    subgraph INGESTION["📥 Step 1: Data Ingestion (Airbyte)"]
+        AIRBYTE["Airbyte<br/>Auto-sync daily"]
+    end
+
+    subgraph STORAGE["🗄️ Storage Layer"]
+        PG_RAW["PostgreSQL<br/>raw.stock_prices"]
+        PG_MART["PostgreSQL<br/>marts.technical_indicators"]
+        PG_PRED["PostgreSQL<br/>public.predictions"]
+        MONGO["MongoDB<br/>(Alternative: document store)"]
+    end
+
+    subgraph TRANSFORM["⚙️ Step 2: Transform (dbt)"]
+        DBT_STG["stg_stock_prices<br/>(clean, deduplicate)"]
+        DBT_MART["technical_indicators<br/>(SMA, MACD, RSI, BB)"]
+    end
+
+    subgraph PREDICTION["🧠 Step 3: ML Prediction"]
+        MODEL["LSTM SavedModel<br/>(per-stock models)"]
+        PREDICT["Inference Script<br/>(30-day window → next-day)"]
+    end
+
+    subgraph SERVING["🚀 Step 4: Model Serving"]
+        FASTAPI["FastAPI REST API<br/>:8000/predict"]
+        STREAMLIT["Streamlit Dashboard<br/>:8501"]
+    end
+
+    subgraph ORCHESTRATION["🔄 Orchestration (Airflow)"]
+        DAG["stock_prediction_dag<br/>Daily @ 18:00 ICT"]
+    end
+
+    %% Data flow
+    API_VN --> AIRBYTE
+    API_FIN --> AIRBYTE
+    API_DIV --> AIRBYTE
+    AIRBYTE --> PG_RAW
+
+    PG_RAW --> DBT_STG
+    DBT_STG --> DBT_MART
+    DBT_MART --> PG_MART
+
+    PG_MART --> PREDICT
+    MODEL --> PREDICT
+    PREDICT --> PG_PRED
+
+    PG_PRED --> FASTAPI
+    MODEL --> FASTAPI
+    FASTAPI --> STREAMLIT
+
+    %% Airflow orchestrates everything
+    DAG -.->|"1. trigger"| AIRBYTE
+    DAG -.->|"2. dbt run"| DBT_STG
+    DAG -.->|"3. predict"| PREDICT
+    DAG -.->|"4. store"| PG_PRED
+    DAG -.->|"5. notify"| STREAMLIT
+
+    style DATA_SOURCES fill:#e8f4f8,stroke:#4A90D9
+    style INGESTION fill:#fef3e2,stroke:#F5A623
+    style STORAGE fill:#e8e8e8,stroke:#666
+    style TRANSFORM fill:#e8f8e8,stroke:#7ED321
+    style PREDICTION fill:#f8e8f8,stroke:#BD10E0
+    style SERVING fill:#e8f8f8,stroke:#4A90D9
+    style ORCHESTRATION fill:#fff3e0,stroke:#FF6B35
